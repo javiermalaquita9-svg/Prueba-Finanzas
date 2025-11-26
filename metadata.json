@@ -1,0 +1,5 @@
+{
+  "name": "Mi Billetera",
+  "description": "Una aplicación completa de gestión financiera personal para rastrear gastos, gestionar tarjetas de crédito, establecer metas de ahorro y generar informes.",
+  "requestFramePermissions": []
+}
