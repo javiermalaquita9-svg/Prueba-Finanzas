@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, AlertCircle } from 'lucide-react';
+import { Menu, AlertCircle, LogOut } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { SummaryView } from './views/SummaryView';
 import { SavingsView } from './views/SavingsView';
@@ -8,6 +8,14 @@ import { ReportsView } from './views/ReportsView';
 import { ConfigView } from './views/ConfigView';
 import { Modal, Button, Input } from './components/UI';
 import { Transaction, UserData, Categories, CardData, WishlistItem, Acquisition, PaidMonths } from './types';
+import { auth, db } from './firebase'; // Importar auth y db
+import { 
+  onAuthStateChanged, 
+  User, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword 
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
 
 // Default Data
 const defaultCategories = {
@@ -20,6 +28,8 @@ const defaultCards = [
 ];
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true); // Para saber si estamos verificando la sesión
   const [activeTab, setActiveTab] = useState('resumen');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
@@ -32,53 +42,92 @@ export default function App() {
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [editForm, setEditForm] = useState({ description: '', amount: '', date: '' });
 
-  // Persistent State
-  const [userData, setUserData] = useState<UserData>(() => {
-    const s = localStorage.getItem('gf_userData');
-    const p = s ? JSON.parse(s) : { name: 'Usuario', phone: '', email: '' };
-    if (!p.countryCode) p.countryCode = '+56';
-    return p;
-  });
+  // State (ahora se cargará desde Firestore)
+  const [userData, setUserData] = useState<UserData>({ name: 'Usuario', phone: '', email: '', countryCode: '+56' });
+  const [categories, setCategories] = useState<Categories>(defaultCategories);
+  const [cards, setCards] = useState<CardData[]>(defaultCards);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
+  const [acquisitions, setAcquisitions] = useState<Acquisition[]>([]);
+  const [paidMonths, setPaidMonths] = useState<PaidMonths>({});
 
-  const [categories, setCategories] = useState<Categories>(() => 
-    JSON.parse(localStorage.getItem('gf_categories') || JSON.stringify(defaultCategories))
-  );
+  // Efecto para manejar el estado de autenticación
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        // Cargar datos del usuario desde Firestore
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
 
-  const [cards, setCards] = useState<CardData[]>(() => 
-    JSON.parse(localStorage.getItem('gf_cards') || JSON.stringify(defaultCards))
-  );
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setUserData(data.userData || { name: currentUser.displayName || 'Usuario', email: currentUser.email, phone: '', countryCode: '+56' });
+          setCategories(data.categories || defaultCategories);
+          setCards(data.cards || defaultCards);
+          setTransactions(data.transactions || []);
+          setWishlist(data.wishlist || []);
+          setAcquisitions(data.acquisitions || []);
+          setPaidMonths(data.paidMonths || {});
+        } else {
+          // Si es un usuario nuevo, creamos su documento con datos por defecto
+          const initialData = {
+            userData: { name: currentUser.displayName || 'Usuario', email: currentUser.email, phone: '', countryCode: '+56' },
+            categories: defaultCategories,
+            cards: defaultCards,
+            transactions: [],
+            wishlist: [],
+            acquisitions: [],
+            paidMonths: {}
+          };
+          await setDoc(userDocRef, initialData);
+          // Seteamos el estado inicial
+          setUserData(initialData.userData);
+          setCategories(initialData.categories);
+          setCards(initialData.cards);
+        }
+      } else {
+        setUser(null);
+        // Limpiar estado si el usuario cierra sesión
+        setUserData({ name: 'Usuario', phone: '', email: '', countryCode: '+56' });
+        setCategories(defaultCategories);
+        setCards(defaultCards);
+        setTransactions([]);
+        setWishlist([]);
+        setAcquisitions([]);
+        setPaidMonths({});
+      }
+      setLoading(false); // Terminamos de cargar
+    });
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => 
-    JSON.parse(localStorage.getItem('gf_transactions') || '[]')
-  );
+    return () => unsubscribe(); // Limpiar el listener al desmontar
+  }, []);
 
-  const [wishlist, setWishlist] = useState<WishlistItem[]>(() => 
-    JSON.parse(localStorage.getItem('gf_wishlist') || '[]')
-  );
+  // Efectos de persistencia (ahora guardan en Firestore)
+  // Usaremos una función para guardar todo de golpe para eficiencia
+  const saveDataToFirestore = async (data: Partial<any>) => {
+    if (!user) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    await setDoc(userDocRef, data, { merge: true });
+  };
 
-  const [acquisitions, setAcquisitions] = useState<Acquisition[]>(() => 
-    JSON.parse(localStorage.getItem('gf_acquisitions') || '[]')
-  );
-
-  const [paidMonths, setPaidMonths] = useState<PaidMonths>(() => 
-    JSON.parse(localStorage.getItem('gf_paid_months') || '{}')
-  );
-
-  // Persistence Effects
-  useEffect(() => localStorage.setItem('gf_userData', JSON.stringify(userData)), [userData]);
-  useEffect(() => localStorage.setItem('gf_categories', JSON.stringify(categories)), [categories]);
-  useEffect(() => localStorage.setItem('gf_cards', JSON.stringify(cards)), [cards]);
-  useEffect(() => localStorage.setItem('gf_transactions', JSON.stringify(transactions)), [transactions]);
-  useEffect(() => localStorage.setItem('gf_wishlist', JSON.stringify(wishlist)), [wishlist]);
-  useEffect(() => localStorage.setItem('gf_acquisitions', JSON.stringify(acquisitions)), [acquisitions]);
-  useEffect(() => localStorage.setItem('gf_paid_months', JSON.stringify(paidMonths)), [paidMonths]);
+  useEffect(() => { if (user) saveDataToFirestore({ userData }); }, [userData, user]);
+  useEffect(() => { if (user) saveDataToFirestore({ categories }); }, [categories, user]);
+  useEffect(() => { if (user) saveDataToFirestore({ cards }); }, [cards, user]);
+  useEffect(() => { if (user) saveDataToFirestore({ transactions }); }, [transactions, user]);
+  useEffect(() => { if (user) saveDataToFirestore({ wishlist }); }, [wishlist, user]);
+  useEffect(() => { if (user) saveDataToFirestore({ acquisitions }); }, [acquisitions, user]);
+  useEffect(() => { if (user) saveDataToFirestore({ paidMonths }); }, [paidMonths, user]);
 
   // Actions
   const handleResetApp = () => {
     if (window.confirm('ADVERTENCIA: ¿Borrar todos los datos y reiniciar la aplicación?')) {
       if (window.confirm('Esta acción es irreversible. ¿Confirmar?')) {
-        localStorage.clear();
-        window.location.reload();
+        // Borrar datos de Firestore y recargar
+        if (user) {
+          const userDocRef = doc(db, 'users', user.uid);
+          setDoc(userDocRef, {}).then(() => window.location.reload());
+        }
       }
     }
   };
@@ -175,6 +224,61 @@ export default function App() {
     }
   };
 
+  // --- Componente de Login ---
+  const LoginScreen = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [isRegistering, setIsRegistering] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleAuth = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError('');
+      try {
+        if (isRegistering) {
+          await createUserWithEmailAndPassword(auth, email, password);
+        } else {
+          await signInWithEmailAndPassword(auth, email, password);
+        }
+      } catch (err: any) {
+        setError(err.message);
+      }
+    };
+
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-100">
+        <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+          <h2 className="text-2xl font-bold text-center text-slate-900">
+            {isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión'}
+          </h2>
+          <form onSubmit={handleAuth} className="space-y-6">
+            <Input label="Correo Electrónico" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+            <Input label="Contraseña" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button type="submit" variant="primary" className="w-full">{isRegistering ? 'Registrarse' : 'Entrar'}</Button>
+          </form>
+          <p className="text-sm text-center text-slate-500">
+            {isRegistering ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}
+            <button onClick={() => setIsRegistering(!isRegistering)} className="ml-1 font-semibold text-indigo-600 hover:underline">
+              {isRegistering ? 'Inicia sesión' : 'Regístrate'}
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  // Si está cargando, muestra un spinner o nada
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen">Cargando...</div>;
+  }
+
+  // Si no hay usuario, muestra la pantalla de login
+  if (!user) {
+    return <LoginScreen />;
+  }
+
+  // Si hay usuario, muestra la app
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-900 overflow-hidden print:overflow-visible print:h-auto">
       {/* Mobile Header */}
@@ -182,7 +286,10 @@ export default function App() {
         <button onClick={() => setIsMobileMenuOpen(true)} className="text-white mr-4">
           <Menu />
         </button>
-        <span className="text-white font-bold text-lg">Mi Billetera</span>
+        <span className="text-white font-bold text-lg flex-1">Mi Billetera</span>
+        <button onClick={() => auth.signOut()} className="text-white">
+          <LogOut size={20} />
+        </button>
       </div>
 
       <Sidebar 

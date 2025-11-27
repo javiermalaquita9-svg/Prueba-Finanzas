@@ -1,19 +1,19 @@
+# Dependencias
+node_modules/
+
+# Archivos de build
+dist/
+build/
+
 # Logs
-logs
-*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-# Dependency directories
-node_modules/
-
-# Build output
-dist
-dist-ssr
-
-# Environment variables
+# Archivos de entorno
 .env
-.env.*
+.env.local
+
+# ¡IMPORTANTE! Archivo con tus credenciales de Firebase
+# Nunca subas este archivo a un repositorio público.
+firebase.ts
