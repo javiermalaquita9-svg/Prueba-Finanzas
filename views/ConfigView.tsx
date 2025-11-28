@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Settings, TrendingUp, TrendingDown, CreditCard, Plus, GripVertical, X, Trash2 } from 'lucide-react';
-import { Card, Input } from '../components/UI';
+import { Settings, TrendingUp, TrendingDown, CreditCard, Plus, GripVertical, X, Trash2, LogOut } from 'lucide-react';
+import { Card, Input, Button } from '../components/UI';
 import { UserData, Categories, CardData } from '../types';
 import { formatCurrency } from '../utils';
 
@@ -12,9 +12,10 @@ interface ConfigViewProps {
   cards: CardData[];
   setCards: (cards: CardData[]) => void;
   handleResetApp: () => void;
+  handleSignOut: () => void;
 }
 
-export const ConfigView = ({ userData, setUserData, categories, setCategories, cards, setCards, handleResetApp }: ConfigViewProps) => {
+export const ConfigView = ({ userData, setUserData, categories, setCategories, cards, setCards, handleResetApp, handleSignOut }: ConfigViewProps) => {
   const [newIncome, setNewIncome] = useState('');
   const [newExpense, setNewExpense] = useState('');
   const [newCard, setNewCard] = useState({ name: '', limit: '' });
@@ -229,10 +230,20 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
           </div>
         </Card>
       </div>
-      <div className="pt-6 border-t border-slate-200 flex justify-end">
-        <button onClick={handleResetApp} className="w-full md:w-1/5 py-2 text-sm text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors flex items-center justify-center gap-2">
-          <Trash2 size={14} /> Resetear Aplicación
-        </button>
+      {/* Panel de Acciones Peligrosas */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-rose-200">
+        <h3 className="text-lg font-semibold text-rose-800 mb-4">Zona de Peligro</h3>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Button onClick={handleResetApp} variant="danger" className="flex items-center justify-center gap-2">
+            <Trash2 size={16} /> Resetear Aplicación
+          </Button>
+          <Button onClick={handleSignOut} variant="secondary" className="flex items-center justify-center gap-2">
+            <LogOut size={16} /> Cerrar Sesión
+          </Button>
+        </div>
+        <p className="text-sm text-slate-500 mt-4">
+          "Resetear Aplicación" borrará todos tus datos. "Cerrar Sesión" te llevará a la pantalla de inicio de sesión.
+        </p>
       </div>
     </div>
   );
