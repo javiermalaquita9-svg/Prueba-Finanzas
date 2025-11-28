@@ -23,7 +23,8 @@ import {
   getDocs, 
   addDoc,
   deleteDoc,
-  updateDoc
+  updateDoc,
+  writeBatch
 } from 'firebase/firestore';
 
 // Default Data
@@ -77,6 +78,23 @@ export default function App() {
           setWishlist(data.wishlist || []);
           setAcquisitions(data.acquisitions || []);
           setPaidMonths(data.paidMonths || {});
+
+          // --- INICIO: SCRIPT DE MIGRACIÓN DE DATOS ---
+          // Este código se ejecutará una sola vez por usuario si encuentra transacciones en el formato antiguo.
+          if (data.transactions && Array.isArray(data.transactions) && data.transactions.length > 0) {
+            const batch = writeBatch(db);
+            const transactionsColRef = collection(db, 'users', currentUser.uid, 'transactions');
+            
+            // 1. Copiamos cada transacción antigua a la nueva subcolección
+            data.transactions.forEach((trans: Omit<Transaction, 'id'>) => {
+              const newTransRef = doc(collection(transactionsColRef)); // Crea una referencia con un ID nuevo
+              batch.set(newTransRef, trans);
+            });
+            // 2. Eliminamos el campo 'transactions' antiguo del documento principal
+            batch.update(userDocRef, { transactions: undefined });
+            await batch.commit(); // Ejecutamos todas las operaciones juntas
+          }
+          // --- FIN: SCRIPT DE MIGRACIÓN DE DATOS ---
 
           // NUEVO: Cargar transacciones desde la subcolección
           const transactionsColRef = collection(db, 'users', currentUser.uid, 'transactions');
