@@ -276,7 +276,8 @@ export default function App() {
           setCategories={setCategories} 
           cards={cards} 
           setCards={setCards} 
-          handleResetApp={handleResetApp} 
+          handleResetApp={handleResetApp}
+          handleSignOut={() => auth.signOut()}
         />;
       default:
         return null;
