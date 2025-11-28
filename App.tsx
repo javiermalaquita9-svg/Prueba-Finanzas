@@ -45,6 +45,7 @@ export default function App() {
   
   // Modals state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<number | null>(null);
   const [isDeletingAcquisition, setIsDeletingAcquisition] = useState(false);
   
@@ -151,15 +152,16 @@ export default function App() {
   useEffect(() => { if (user) saveDataToFirestore({ paidMonths }); }, [paidMonths, user]);
 
   // Actions
-  const handleResetApp = () => {
-    if (window.confirm('ADVERTENCIA: ¿Borrar todos los datos y reiniciar la aplicación?')) {
-      if (window.confirm('Esta acción es irreversible. ¿Confirmar?')) {
-        // Borrar datos de Firestore y recargar
-        if (user) {
-          const userDocRef = doc(db, 'users', user.uid);
-          setDoc(userDocRef, {}).then(() => window.location.reload());
-        }
-      }
+  const promptResetApp = () => {
+    setResetModalOpen(true);
+  };
+
+  const confirmResetApp = () => {
+    if (user) {
+      const userDocRef = doc(db, 'users', user.uid);
+      setDoc(userDocRef, {}).then(() => {
+        window.location.reload();
+      });
     }
   };
 
@@ -276,7 +278,7 @@ export default function App() {
           setCategories={setCategories} 
           cards={cards} 
           setCards={setCards} 
-          handleResetApp={handleResetApp}
+          handleResetApp={promptResetApp}
           handleSignOut={() => auth.signOut()}
         />;
       default:

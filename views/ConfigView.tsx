@@ -230,20 +230,13 @@ export const ConfigView = ({ userData, setUserData, categories, setCategories, c
           </div>
         </Card>
       </div>
-      {/* Panel de Acciones Peligrosas */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-rose-200">
-        <h3 className="text-lg font-semibold text-rose-800 mb-4">Zona de Peligro</h3>
-        <div className="flex flex-col sm:flex-row gap-4">
-          <Button onClick={handleResetApp} variant="danger" className="flex items-center justify-center gap-2">
-            <Trash2 size={16} /> Resetear Aplicación
-          </Button>
-          <Button onClick={handleSignOut} variant="secondary" className="flex items-center justify-center gap-2">
-            <LogOut size={16} /> Cerrar Sesión
-          </Button>
-        </div>
-        <p className="text-sm text-slate-500 mt-4">
-          "Resetear Aplicación" borrará todos tus datos. "Cerrar Sesión" te llevará a la pantalla de inicio de sesión.
-        </p>
+      <div className="pt-6 border-t border-slate-200 flex justify-end gap-4">
+        <button onClick={handleResetApp} className="py-2 text-sm text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors flex items-center justify-center gap-2 px-4">
+          <Trash2 size={14} /> Resetear Aplicación
+        </button>
+        <button onClick={handleSignOut} className="py-2 text-sm text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors flex items-center justify-center gap-2 px-4">
+          <LogOut size={14} /> Cerrar Sesión
+        </button>
       </div>
     </div>
   );
