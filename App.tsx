@@ -15,7 +15,16 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword 
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  collection, 
+  getDocs, 
+  addDoc,
+  deleteDoc,
+  updateDoc
+} from 'firebase/firestore';
 
 // Default Data
 const defaultCategories = {
@@ -65,10 +74,15 @@ export default function App() {
           setUserData(data.userData || { name: currentUser.displayName || 'Usuario', email: currentUser.email, phone: '', countryCode: '+56' });
           setCategories(data.categories || defaultCategories);
           setCards(data.cards || defaultCards);
-          setTransactions(data.transactions || []);
           setWishlist(data.wishlist || []);
           setAcquisitions(data.acquisitions || []);
           setPaidMonths(data.paidMonths || {});
+
+          // NUEVO: Cargar transacciones desde la subcolección
+          const transactionsColRef = collection(db, 'users', currentUser.uid, 'transactions');
+          const transactionSnapshot = await getDocs(transactionsColRef);
+          const transactionsList = transactionSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Transaction));
+          setTransactions(transactionsList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())); // Ordenar por fecha
         } else {
           // Si es un usuario nuevo, creamos su documento con datos por defecto
           const initialData = {
@@ -80,7 +94,7 @@ export default function App() {
             acquisitions: [],
             paidMonths: {}
           };
-          await setDoc(userDocRef, initialData);
+          await setDoc(userDocRef, { ...initialData, transactions: undefined }); // No guardamos transactions aquí
           // Seteamos el estado inicial
           setUserData(initialData.userData);
           setCategories(initialData.categories);
@@ -114,7 +128,6 @@ export default function App() {
   useEffect(() => { if (user) saveDataToFirestore({ userData }); }, [userData, user]);
   useEffect(() => { if (user) saveDataToFirestore({ categories }); }, [categories, user]);
   useEffect(() => { if (user) saveDataToFirestore({ cards }); }, [cards, user]);
-  useEffect(() => { if (user) saveDataToFirestore({ transactions }); }, [transactions, user]);
   useEffect(() => { if (user) saveDataToFirestore({ wishlist }); }, [wishlist, user]);
   useEffect(() => { if (user) saveDataToFirestore({ acquisitions }); }, [acquisitions, user]);
   useEffect(() => { if (user) saveDataToFirestore({ paidMonths }); }, [paidMonths, user]);
@@ -132,33 +145,61 @@ export default function App() {
     }
   };
 
-  const addTransaction = (newTrans: Transaction) => setTransactions([newTrans, ...transactions]);
+  // MODIFICADO: addTransaction ahora guarda en Firestore
+  const addTransaction = async (newTrans: Omit<Transaction, 'id'>) => {
+    if (!user) return;
+    const transactionsColRef = collection(db, 'users', user.uid, 'transactions');
+    const docRef = await addDoc(transactionsColRef, newTrans);
+    // Actualizamos el estado local con la nueva transacción y su ID de Firestore
+    setTransactions([{ ...newTrans, id: docRef.id } as Transaction, ...transactions]);
+  };
 
   const promptDelete = (id: number, isAcquisition = false) => {
-    setTransactionToDelete(id);
+    // El ID ahora es un string de Firestore
+    setTransactionToDelete(id as any); // Se mantiene como number para adquisiciones por ahora
     setIsDeletingAcquisition(isAcquisition);
     setDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
+  // MODIFICADO: confirmDelete ahora borra de Firestore
+  const confirmDelete = async () => {
     if (transactionToDelete) {
       if (isDeletingAcquisition) {
         setAcquisitions(acquisitions.filter(a => a.id !== transactionToDelete));
       } else {
-        setTransactions(transactions.filter(t => t.id !== transactionToDelete));
+        if (!user) return;
+        // El ID de la transacción ahora es un string
+        const transId = transactionToDelete as unknown as string;
+        const transDocRef = doc(db, 'users', user.uid, 'transactions', transId);
+        await deleteDoc(transDocRef);
+        // Actualizamos el estado local
+        setTransactions(transactions.filter(t => t.id !== transId));
       }
       setTransactionToDelete(null);
       setDeleteModalOpen(false);
     }
   };
 
-  const saveEdit = () => {
+  // MODIFICADO: saveEdit ahora actualiza en Firestore
+  const saveEdit = async () => {
     if (!transactionToEdit) return;
-    setTransactions(transactions.map(t => 
-      t.id === transactionToEdit.id 
-        ? { ...t, description: editForm.description, amount: parseFloat(editForm.amount), date: editForm.date } 
-        : t
-    ));
+    if (!user) return;
+
+    const updatedTransaction = { 
+      ...transactionToEdit, 
+      description: editForm.description, 
+      amount: parseFloat(editForm.amount), 
+      date: editForm.date 
+    };
+
+    const transDocRef = doc(db, 'users', user.uid, 'transactions', transactionToEdit.id as string);
+    await updateDoc(transDocRef, {
+      description: updatedTransaction.description,
+      amount: updatedTransaction.amount,
+      date: updatedTransaction.date
+    });
+
+    setTransactions(transactions.map(t => t.id === transactionToEdit.id ? updatedTransaction : t));
     setEditModalOpen(false);
     setTransactionToEdit(null);
   };
